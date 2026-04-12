@@ -113,6 +113,26 @@ body {
   color: var(--muted);
 }
 
+.credit-banner {
+  margin-top: 1.2rem;
+  max-width: 780px;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(138, 63, 33, 0.14);
+  border-radius: 22px;
+  background: rgba(255, 250, 242, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.credit-banner p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.credit-banner p + p {
+  margin-top: 0.45rem;
+}
+
 .voice-picker {
   display: grid;
   gap: 0.35rem;
@@ -348,6 +368,10 @@ button:hover,
   margin-top: 1.25rem;
 }
 
+.ownership-panel {
+  margin-top: 1.25rem;
+}
+
 .player-card {
   padding: 1.2rem;
 }
@@ -374,6 +398,21 @@ button:hover,
 .reader-mode,
 .transcript-empty {
   color: var(--muted);
+}
+
+.ownership-copy {
+  display: grid;
+  gap: 0.65rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.ownership-copy p {
+  margin: 0;
+}
+
+.ownership-copy a {
+  color: var(--accent-deep);
 }
 
 .transcript-viewer {
