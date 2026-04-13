@@ -16,11 +16,15 @@ from typing import Any
 import edge_tts
 import numpy as np
 import soundfile as sf
+from bs4 import BeautifulSoup
+from ebooklib import ITEM_DOCUMENT, epub
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from piper import PiperVoice
 from piper.download_voices import download_voice
+from pypdf import PdfReader
+from rapidocr_onnxruntime import RapidOCR
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -133,6 +137,8 @@ job_queue: queue.Queue[str] = queue.Queue()
 voices_lock = threading.Lock()
 piper_voices: dict[str, PiperVoice] = {}
 worker_started = False
+ocr_lock = threading.Lock()
+ocr_engine: RapidOCR | None = None
 
 
 def get_voice_config(voice_id: str) -> dict[str, str]:
@@ -156,6 +162,14 @@ def get_piper_voice(voice_name: str) -> PiperVoice:
             model_path = ensure_piper_voice(voice_name)
             piper_voices[voice_name] = PiperVoice.load(model_path)
         return piper_voices[voice_name]
+
+
+def get_ocr_engine() -> RapidOCR:
+    global ocr_engine
+    with ocr_lock:
+        if ocr_engine is None:
+            ocr_engine = RapidOCR()
+        return ocr_engine
 
 
 def clean_text(text: str) -> str:
@@ -268,16 +282,91 @@ def restore_jobs_from_disk() -> None:
         jobs.update(restored)
 
 
+def extract_pdf_text(content: bytes) -> str:
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_pdf:
+        temp_pdf.write(content)
+        temp_pdf.flush()
+        reader = PdfReader(temp_pdf.name)
+        extracted_pages: list[str] = []
+        for page in reader.pages:
+            page_text = page.extract_text() or ""
+            if page_text.strip():
+                extracted_pages.append(page_text.strip())
+    return "\n\n".join(extracted_pages)
+
+
+def extract_pdf_text_with_ocr(content: bytes) -> str:
+    ocr = get_ocr_engine()
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        pdf_path = temp_dir_path / "upload.pdf"
+        pdf_path.write_bytes(content)
+        image_prefix = temp_dir_path / "page"
+
+        try:
+            subprocess.run(
+                ["pdftoppm", "-png", str(pdf_path), str(image_prefix)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unable to render this PDF for OCR: {exc.stderr.strip()}",
+            ) from exc
+
+        page_texts: list[str] = []
+        for image_path in sorted(temp_dir_path.glob("page-*.png")):
+            result, _ = ocr(str(image_path))
+            if not result:
+                continue
+            page_lines = [item[1].strip() for item in result if len(item) > 1 and item[1].strip()]
+            if page_lines:
+                page_texts.append("\n".join(page_lines))
+
+    return "\n\n".join(page_texts)
+
+
+def extract_epub_text(content: bytes) -> str:
+    with tempfile.NamedTemporaryFile(suffix=".epub") as temp_epub:
+        temp_epub.write(content)
+        temp_epub.flush()
+        book = epub.read_epub(temp_epub.name)
+        sections: list[str] = []
+        for item in book.get_items_of_type(ITEM_DOCUMENT):
+            soup = BeautifulSoup(item.get_body_content(), "lxml")
+            text = soup.get_text(separator=" ", strip=True)
+            if text:
+                sections.append(text)
+    return "\n\n".join(sections)
+
+
 def read_text_file(upload: UploadFile, content: bytes) -> str:
     suffix = Path(upload.filename or "").suffix.lower()
+    if suffix == ".pdf":
+        extracted_text = extract_pdf_text(content)
+        if not extracted_text.strip():
+            extracted_text = extract_pdf_text_with_ocr(content)
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract readable text from this PDF.")
+        return extracted_text
+
+    if suffix == ".epub":
+        extracted_text = extract_epub_text(content)
+        if not extracted_text.strip():
+            raise HTTPException(status_code=400, detail="Could not extract readable text from this EPUB.")
+        return extracted_text
+
     if suffix not in {".txt", ".md", ".csv", ".log"}:
-        raise HTTPException(status_code=400, detail="Only plain text files are supported.")
+        raise HTTPException(status_code=400, detail="Supported files are EPUB, PDF, TXT, MD, CSV, and LOG.")
     for encoding in ("utf-8", "utf-8-sig"):
         try:
             return content.decode(encoding)
         except UnicodeDecodeError:
             continue
-    raise HTTPException(status_code=400, detail="The uploaded file must be UTF-8 text.")
+    raise HTTPException(status_code=400, detail="The uploaded text file must be UTF-8 text.")
 
 
 def set_job(job_id: str, **updates: Any) -> None:

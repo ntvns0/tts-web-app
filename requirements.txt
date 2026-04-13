@@ -4,3 +4,6 @@ python-multipart==0.0.20
 soundfile==0.13.1
 piper-tts==1.4.2
 edge-tts==7.2.8
+pypdf==6.1.1
+rapidocr_onnxruntime==1.2.3
+ebooklib==0.19

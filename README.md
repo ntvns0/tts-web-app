@@ -16,7 +16,7 @@ By using this repository, you agree to the terms in [LICENSE](LICENSE).
 
 ## Features
 
-- Upload a plain text file, paste text, or drag and drop a file
+- Upload an EPUB, PDF, or plain text file, paste text, or drag and drop a file
 - Queue TTS jobs and watch chunk-by-chunk processing progress
 - Choose between more natural premium neural voices and offline local voices
 - Keep completed tracks in a selectable library that survives app restarts
@@ -36,7 +36,9 @@ Open `http://127.0.0.1:8000`.
 
 - The app offers higher-quality Microsoft Edge neural voices by default. These require internet access during synthesis.
 - The app also keeps local Piper fallback voices in `./models`, including `en_US-ryan-high` and `en_US-lessac-medium`.
-- Uploaded files must be UTF-8 plain text and under 5 MB.
+- Uploaded files must be under 5 MB. Text files must be UTF-8.
+- PDF uploads first use embedded text extraction, then fall back to local OCR for scanned/image PDFs.
+- EPUB uploads extract chapter/document text and feed it into the same TTS and synced transcript flow.
 - Generated `data/` files and downloaded `models/` are intentionally ignored by git.
 - Track metadata is stored locally so completed audio files show back up in the library after you restart the app.
 - Uploaded text files use their source filename for the generated audio. Pasted text can use a user-supplied title or an automatic title based on the opening words.
