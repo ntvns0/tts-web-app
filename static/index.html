@@ -73,15 +73,20 @@
         </form>
       </section>
 
-      <section class="panel jobs-panel">
-        <div class="panel-header">
-          <h2>Your Library</h2>
+      <aside class="panel jobs-panel">
+        <div class="panel-header library-header">
+          <div>
+            <h2>Your Library</h2>
+            <p>Completed tracks stay here between sessions.</p>
+          </div>
           <p id="job-count">0 jobs</p>
         </div>
-        <div id="job-list" class="job-list">
-          <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
+        <div class="library-scroll">
+          <div id="job-list" class="job-list">
+            <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
+          </div>
         </div>
-      </section>
+      </aside>
     </section>
 
     <section class="panel player-panel">
@@ -94,17 +99,18 @@
       </div>
 
       <div class="player-card">
-        <div class="track-meta">
-          <p class="track-label">Selected Track</p>
-          <h3 id="track-title">Nothing selected</h3>
-          <p id="track-voice" class="track-voice">No voice selected</p>
-        </div>
-
-        <div class="player-controls">
-          <button type="button" id="back-button" class="round-button">-5s</button>
-          <button type="button" id="play-button" class="play-button">Play</button>
-          <button type="button" id="pause-button" class="round-button">Pause</button>
-          <button type="button" id="forward-button" class="round-button">+5s</button>
+        <div class="player-topbar">
+          <div class="track-meta">
+            <p class="track-label">Selected Track</p>
+            <h3 id="track-title">Nothing selected</h3>
+            <p id="track-voice" class="track-voice">No voice selected</p>
+          </div>
+          <div class="transport-controls">
+            <button type="button" id="back-button" class="transport-button">-5s</button>
+            <button type="button" id="play-button" class="play-button">Play</button>
+            <button type="button" id="pause-button" class="transport-button">Pause</button>
+            <button type="button" id="forward-button" class="transport-button">+5s</button>
+          </div>
         </div>
 
         <div class="timeline-wrap">
@@ -123,27 +129,39 @@
           <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
         </div>
         <div class="reader-controls">
-          <label class="sync-control">
-            <span>Base Shift</span>
-            <input id="sync-offset" type="range" min="-15" max="15" step="0.1" value="0" />
-          </label>
-          <label class="sync-control">
-            <span>Drift Correction By End</span>
-            <input id="sync-drift" type="range" min="-20" max="20" step="0.25" value="0" />
-          </label>
-          <div class="sync-actions">
-            <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
-            <span id="sync-drift-value" class="sync-offset-value">0.00s by end</span>
-            <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
-            <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
-            <button type="button" id="drift-less" class="ghost-button compact-button">Less Drift</button>
-            <button type="button" id="drift-more" class="ghost-button compact-button">More Drift</button>
-            <button type="button" id="sync-reset" class="ghost-button compact-button">Reset</button>
+          <div class="sync-grid">
+            <label class="sync-control">
+              <span>Base Shift</span>
+              <input id="sync-offset" type="range" min="-15" max="15" step="0.1" value="0" />
+            </label>
+            <label class="sync-control">
+              <span>Drift Correction By End</span>
+              <input id="sync-drift" type="range" min="-20" max="20" step="0.25" value="0" />
+            </label>
           </div>
-          <div class="sync-actions">
-            <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
-            <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
-            <button type="button" id="clear-calibration" class="ghost-button compact-button">Clear Points</button>
+          <div class="sync-dashboard">
+            <div class="sync-readouts">
+              <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
+              <span id="sync-drift-value" class="sync-offset-value">0.00s by end</span>
+            </div>
+            <div class="sync-button-group">
+              <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
+              <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
+              <button type="button" id="drift-less" class="ghost-button compact-button">Less Drift</button>
+              <button type="button" id="drift-more" class="ghost-button compact-button">More Drift</button>
+              <button type="button" id="sync-reset" class="ghost-button compact-button secondary-button">Reset</button>
+            </div>
+          </div>
+          <div class="sync-calibration">
+            <div class="sync-button-group">
+              <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
+              <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
+              <button type="button" id="clear-calibration" class="ghost-button compact-button secondary-button">Clear Points</button>
+            </div>
+            <label class="follow-toggle">
+              <input id="follow-playback" type="checkbox" checked />
+              <span>Auto-follow while playing</span>
+            </label>
           </div>
           <p id="calibration-status" class="sync-help">
             Two-point calibration: set a start point, then an end point, then click the matching transcript words.
@@ -151,10 +169,6 @@
           <p class="sync-help">
             Click a word to align the transcript to the current playback point without moving the audio.
           </p>
-          <label class="follow-toggle">
-            <input id="follow-playback" type="checkbox" checked />
-            <span>Auto-follow while playing</span>
-          </label>
         </div>
         <div id="transcript-viewer" class="transcript-viewer">
           <p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>

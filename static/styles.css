@@ -73,6 +73,7 @@ body {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 1.25rem;
+  align-items: start;
 }
 
 .panel {
@@ -87,6 +88,13 @@ body {
 .jobs-panel,
 .player-panel {
   padding: 1.4rem;
+}
+
+.jobs-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 760px;
+  max-height: 760px;
 }
 
 .panel-header {
@@ -105,6 +113,16 @@ body {
 .panel-header p {
   margin: 0;
   color: var(--muted);
+}
+
+.library-header {
+  margin-bottom: 0.9rem;
+}
+
+.library-scroll {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
 }
 
 .voice-description,
@@ -223,7 +241,6 @@ body {
 }
 
 .actions,
-.player-controls,
 .timeline-wrap {
   display: flex;
   align-items: center;
@@ -239,7 +256,7 @@ button,
 
 .primary-button,
 .play-button,
-.round-button,
+.transport-button,
 .ghost-button,
 .ghost-link {
   border-radius: 999px;
@@ -255,7 +272,7 @@ button,
 
 .ghost-button,
 .ghost-link,
-.round-button {
+.transport-button {
   padding: 0.92rem 1.1rem;
   background: var(--accent-soft);
   color: var(--accent-deep);
@@ -379,8 +396,32 @@ button:hover,
   margin-top: 1.25rem;
 }
 
+.ownership-panel .panel-header {
+  justify-content: center;
+  text-align: center;
+}
+
+.ownership-panel .panel-header > div {
+  width: 100%;
+}
+
 .player-card {
   padding: 1.2rem;
+}
+
+.player-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.transport-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .reader-card {
@@ -409,8 +450,14 @@ button:hover,
 
 .reader-controls {
   display: grid;
-  gap: 0.8rem;
+  gap: 1rem;
   margin-bottom: 1rem;
+}
+
+.sync-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 .sync-control {
@@ -420,7 +467,18 @@ button:hover,
   font-size: 0.95rem;
 }
 
-.sync-actions {
+.sync-dashboard,
+.sync-calibration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sync-actions,
+.sync-button-group,
+.sync-readouts {
   display: flex;
   align-items: center;
   gap: 0.65rem;
@@ -431,6 +489,9 @@ button:hover,
   min-width: 4.5rem;
   color: var(--accent-deep);
   font-weight: 800;
+  padding: 0.68rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(216, 111, 69, 0.12);
 }
 
 #sync-drift-value {
@@ -452,6 +513,11 @@ button:hover,
   padding: 0.72rem 0.95rem;
 }
 
+.secondary-button {
+  background: rgba(31, 26, 23, 0.08);
+  color: var(--ink);
+}
+
 .follow-toggle {
   display: inline-flex;
   align-items: center;
@@ -469,6 +535,9 @@ button:hover,
   gap: 0.65rem;
   color: var(--muted);
   line-height: 1.7;
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .ownership-copy p {
@@ -544,6 +613,20 @@ button:hover,
   .workspace {
     grid-template-columns: 1fr;
   }
+
+  .jobs-panel {
+    min-height: auto;
+    max-height: 480px;
+  }
+
+  .sync-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .player-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 640px) {
@@ -553,9 +636,13 @@ button:hover,
   }
 
   .actions,
-  .player-controls,
+  .transport-controls,
   .timeline-wrap,
   .sync-actions,
+  .sync-button-group,
+  .sync-readouts,
+  .sync-dashboard,
+  .sync-calibration,
   .panel-header,
   .job-topline,
   .job-actions {
@@ -563,7 +650,7 @@ button:hover,
   }
 
   .play-button,
-  .round-button,
+  .transport-button,
   .primary-button,
   .ghost-button {
     width: 100%;
