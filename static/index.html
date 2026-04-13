@@ -136,15 +136,33 @@
           </div>
           <div class="reader-controls">
             <label class="sync-control">
-              <span>Transcript Shift</span>
+              <span>Base Shift</span>
               <input id="sync-offset" type="range" min="-3" max="3" step="0.05" value="0" />
+            </label>
+            <label class="sync-control">
+              <span>Drift Correction By End</span>
+              <input id="sync-drift" type="range" min="-20" max="20" step="0.25" value="0" />
             </label>
             <div class="sync-actions">
               <span id="sync-offset-value" class="sync-offset-value">0.00s</span>
+              <span id="sync-drift-value" class="sync-offset-value">0.00s by end</span>
               <button type="button" id="sync-earlier" class="ghost-button compact-button">Earlier</button>
               <button type="button" id="sync-later" class="ghost-button compact-button">Later</button>
+              <button type="button" id="drift-less" class="ghost-button compact-button">Less Drift</button>
+              <button type="button" id="drift-more" class="ghost-button compact-button">More Drift</button>
               <button type="button" id="sync-reset" class="ghost-button compact-button">Reset</button>
             </div>
+            <div class="sync-actions">
+              <button type="button" id="calibrate-start" class="ghost-button compact-button">Set Start Point</button>
+              <button type="button" id="calibrate-end" class="ghost-button compact-button">Set End Point</button>
+              <button type="button" id="clear-calibration" class="ghost-button compact-button">Clear Points</button>
+            </div>
+            <p id="calibration-status" class="sync-help">
+              Two-point calibration: set a start point, then an end point, then click the matching transcript words.
+            </p>
+            <p class="sync-help">
+              Click a word to align the transcript to the current playback point without moving the audio.
+            </p>
             <label class="follow-toggle">
               <input id="follow-playback" type="checkbox" checked />
               <span>Auto-follow while playing</span>

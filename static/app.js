@@ -25,11 +25,21 @@ const downloadLink = document.getElementById("download-link");
 const transcriptViewer = document.getElementById("transcript-viewer");
 const readerMode = document.getElementById("reader-mode");
 const syncOffsetInput = document.getElementById("sync-offset");
+const syncDriftInput = document.getElementById("sync-drift");
 const syncOffsetValue = document.getElementById("sync-offset-value");
+const syncDriftValue = document.getElementById("sync-drift-value");
 const syncEarlierButton = document.getElementById("sync-earlier");
 const syncLaterButton = document.getElementById("sync-later");
+const driftLessButton = document.getElementById("drift-less");
+const driftMoreButton = document.getElementById("drift-more");
 const syncResetButton = document.getElementById("sync-reset");
 const followPlaybackInput = document.getElementById("follow-playback");
+const calibrateStartButton = document.getElementById("calibrate-start");
+const calibrateEndButton = document.getElementById("calibrate-end");
+const clearCalibrationButton = document.getElementById("clear-calibration");
+const calibrationStatus = document.getElementById("calibration-status");
+const MAX_BASE_OFFSET_SECONDS = 3;
+const MAX_DRIFT_SECONDS = 20;
 
 let jobs = [];
 let selectedJobId = null;
@@ -38,9 +48,19 @@ let transcriptData = null;
 let activeWordIndex = -1;
 let loadedTranscriptJobId = null;
 let transcriptOffsetSeconds = 0;
+let transcriptDriftSeconds = 0;
+let pendingCalibrationPoint = null;
+let calibrationPoints = {
+  start: null,
+  end: null,
+};
 
-function transcriptStorageKey(jobId) {
-  return `tts-sync-offset:${jobId}`;
+function transcriptSettingsKey(jobId) {
+  return `tts-sync-settings:${jobId}`;
+}
+
+function calibrationSettingsKey(jobId) {
+  return `tts-sync-calibration:${jobId}`;
 }
 
 function formatTime(totalSeconds) {
@@ -54,27 +74,166 @@ function formatTime(totalSeconds) {
 }
 
 function formatOffset(seconds) {
-  const sign = seconds > 0 ? "+" : "";
-  return `${sign}${seconds.toFixed(2)}s`;
+  if (seconds > 0) {
+    return `Earlier ${seconds.toFixed(2)}s`;
+  }
+  if (seconds < 0) {
+    return `Later ${Math.abs(seconds).toFixed(2)}s`;
+  }
+  return "Aligned";
 }
 
-function setTranscriptOffset(value, { persist = true } = {}) {
+function formatDrift(seconds) {
+  if (seconds > 0) {
+    return `Earlier ${seconds.toFixed(2)}s by end`;
+  }
+  if (seconds < 0) {
+    return `Later ${Math.abs(seconds).toFixed(2)}s by end`;
+  }
+  return "No drift";
+}
+
+function saveSyncSettings() {
+  if (!selectedJobId) {
+    return;
+  }
+  window.localStorage.setItem(
+    transcriptSettingsKey(selectedJobId),
+    JSON.stringify({
+      offset: transcriptOffsetSeconds,
+      drift: transcriptDriftSeconds,
+    }),
+  );
+}
+
+function saveCalibrationPoints() {
+  if (!selectedJobId) {
+    return;
+  }
+  window.localStorage.setItem(
+    calibrationSettingsKey(selectedJobId),
+    JSON.stringify(calibrationPoints),
+  );
+}
+
+function setTranscriptOffset(value, { persist = true, refresh = true } = {}) {
   transcriptOffsetSeconds = Number(value);
   syncOffsetInput.value = String(transcriptOffsetSeconds);
   syncOffsetValue.textContent = formatOffset(transcriptOffsetSeconds);
-  if (persist && selectedJobId) {
-    window.localStorage.setItem(transcriptStorageKey(selectedJobId), String(transcriptOffsetSeconds));
+  if (persist) {
+    saveSyncSettings();
   }
-  updateTranscriptForCurrentTime(audioElement.currentTime);
+  if (refresh) {
+    updateTranscriptForCurrentTime(audioElement.currentTime);
+  }
 }
 
-function loadSavedOffset(jobId) {
-  const saved = window.localStorage.getItem(transcriptStorageKey(jobId));
-  if (saved === null) {
-    return 0;
+function setTranscriptDrift(value, { persist = true, refresh = true } = {}) {
+  transcriptDriftSeconds = Number(value);
+  syncDriftInput.value = String(transcriptDriftSeconds);
+  syncDriftValue.textContent = formatDrift(transcriptDriftSeconds);
+  if (persist) {
+    saveSyncSettings();
   }
-  const parsed = Number(saved);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (refresh) {
+    updateTranscriptForCurrentTime(audioElement.currentTime);
+  }
+}
+
+function loadSavedSyncSettings(jobId) {
+  const saved = window.localStorage.getItem(transcriptSettingsKey(jobId));
+  if (saved === null) {
+    return { offset: 0, drift: 0 };
+  }
+  try {
+    const parsed = JSON.parse(saved);
+    return {
+      offset: Number.isFinite(Number(parsed.offset)) ? Number(parsed.offset) : 0,
+      drift: Number.isFinite(Number(parsed.drift)) ? Number(parsed.drift) : 0,
+    };
+  } catch {
+    return { offset: 0, drift: 0 };
+  }
+}
+
+function loadSavedCalibrationPoints(jobId) {
+  const saved = window.localStorage.getItem(calibrationSettingsKey(jobId));
+  if (saved === null) {
+    return { start: null, end: null };
+  }
+  try {
+    const parsed = JSON.parse(saved);
+    return {
+      start: parsed.start ?? null,
+      end: parsed.end ?? null,
+    };
+  } catch {
+    return { start: null, end: null };
+  }
+}
+
+function applySyncSettings(settings, { refresh = true } = {}) {
+  setTranscriptOffset(settings.offset, { persist: false, refresh: false });
+  setTranscriptDrift(settings.drift, { persist: false, refresh: false });
+  if (refresh) {
+    updateTranscriptForCurrentTime(audioElement.currentTime);
+  }
+}
+
+function updateCalibrationStatus() {
+  if (pendingCalibrationPoint === "start") {
+    calibrationStatus.textContent = "Start point armed. Click the matching transcript word for the current audio position.";
+    return;
+  }
+  if (pendingCalibrationPoint === "end") {
+    calibrationStatus.textContent = "End point armed. Click the matching transcript word for the current audio position.";
+    return;
+  }
+  if (calibrationPoints.start && calibrationPoints.end) {
+    calibrationStatus.textContent = "Two-point calibration saved for this track.";
+    return;
+  }
+  if (calibrationPoints.start) {
+    calibrationStatus.textContent = "Start point saved. Move later in the track, press Set End Point, then click the matching word.";
+    return;
+  }
+  calibrationStatus.textContent = "Two-point calibration: set a start point, then an end point, then click the matching transcript words.";
+}
+
+function applyTwoPointCalibration() {
+  if (!calibrationPoints.start || !calibrationPoints.end) {
+    return false;
+  }
+  const a1 = Number(calibrationPoints.start.audioTime);
+  const t1 = Number(calibrationPoints.start.transcriptTime);
+  const a2 = Number(calibrationPoints.end.audioTime);
+  const t2 = Number(calibrationPoints.end.transcriptTime);
+  const duration = audioElement.duration || transcriptData?.words?.[transcriptData.words.length - 1]?.end_time || 0;
+  if (!(duration > 0) || !(a2 > a1)) {
+    return false;
+  }
+
+  const progress1 = Math.max(0, Math.min(1, a1 / duration));
+  const progress2 = Math.max(0, Math.min(1, a2 / duration));
+  const delta1 = t1 - a1;
+  const delta2 = t2 - a2;
+  const progressDiff = progress2 - progress1;
+
+  let nextOffset = delta1;
+  let nextDrift = transcriptDriftSeconds;
+
+  if (Math.abs(progressDiff) > 0.001) {
+    nextDrift = (delta2 - delta1) / progressDiff;
+    nextOffset = delta1 - (nextDrift * progress1);
+  }
+
+  nextOffset = Math.max(-MAX_BASE_OFFSET_SECONDS, Math.min(MAX_BASE_OFFSET_SECONDS, nextOffset));
+  nextDrift = Math.max(-MAX_DRIFT_SECONDS, Math.min(MAX_DRIFT_SECONDS, nextDrift));
+
+  applySyncSettings({ offset: nextOffset, drift: nextDrift });
+  saveCalibrationPoints();
+  updateCalibrationStatus();
+  return true;
 }
 
 function updateSelectedFileLabel() {
@@ -221,7 +380,9 @@ function updateTranscriptForCurrentTime(currentTime) {
   if (!transcriptData || !transcriptData.words || !transcriptData.words.length) {
     return;
   }
-  const adjustedTime = Math.max(0, currentTime + transcriptOffsetSeconds);
+  const duration = audioElement.duration || transcriptData.words[transcriptData.words.length - 1].end_time || 0;
+  const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
+  const adjustedTime = Math.max(0, currentTime + transcriptOffsetSeconds + (transcriptDriftSeconds * progress));
 
   let foundIndex = -1;
   for (let index = 0; index < transcriptData.words.length; index += 1) {
@@ -263,8 +424,10 @@ async function loadTranscript(job) {
   const data = await response.json();
   loadedTranscriptJobId = job.id;
   renderTranscript(data);
-  setTranscriptOffset(loadSavedOffset(job.id), { persist: false });
-  updateTranscriptForCurrentTime(audioElement.currentTime);
+  applySyncSettings(loadSavedSyncSettings(job.id));
+  calibrationPoints = loadSavedCalibrationPoints(job.id);
+  pendingCalibrationPoint = null;
+  updateCalibrationStatus();
 }
 
 function syncSelectedJob() {
@@ -284,7 +447,10 @@ function syncSelectedJob() {
   downloadLink.href = current.download_url;
   downloadLink.textContent = `Download ${String(current.audio_format || "").toUpperCase()}`;
   downloadLink.classList.remove("hidden");
-  setTranscriptOffset(loadSavedOffset(current.id), { persist: false });
+  applySyncSettings(loadSavedSyncSettings(current.id), { refresh: false });
+  calibrationPoints = loadSavedCalibrationPoints(current.id);
+  pendingCalibrationPoint = null;
+  updateCalibrationStatus();
   loadTranscript(current);
 }
 
@@ -299,13 +465,19 @@ function selectJob(jobId) {
   timeline.value = 0;
   currentTimeEl.textContent = "0:00";
   loadedTranscriptJobId = null;
+  pendingCalibrationPoint = null;
   syncSelectedJob();
   renderJobs();
 }
 
 function nudgeTranscriptOffset(delta) {
-  const next = Math.max(-3, Math.min(3, transcriptOffsetSeconds + delta));
+  const next = Math.max(-MAX_BASE_OFFSET_SECONDS, Math.min(MAX_BASE_OFFSET_SECONDS, transcriptOffsetSeconds + delta));
   setTranscriptOffset(next);
+}
+
+function nudgeTranscriptDrift(delta) {
+  const next = Math.max(-MAX_DRIFT_SECONDS, Math.min(MAX_DRIFT_SECONDS, transcriptDriftSeconds + delta));
+  setTranscriptDrift(next);
 }
 
 async function loadVoices() {
@@ -432,7 +604,30 @@ transcriptViewer.addEventListener("click", (event) => {
   }
   const startTime = Number(target.dataset.startTime);
   if (Number.isFinite(startTime)) {
-    audioElement.currentTime = Math.max(0, startTime - transcriptOffsetSeconds);
+    if (pendingCalibrationPoint) {
+      calibrationPoints[pendingCalibrationPoint] = {
+        audioTime: audioElement.currentTime,
+        transcriptTime: startTime,
+      };
+      pendingCalibrationPoint = null;
+      if (!applyTwoPointCalibration()) {
+        saveCalibrationPoints();
+        updateCalibrationStatus();
+      }
+      return;
+    }
+    const duration = audioElement.duration || transcriptData?.words?.[transcriptData.words.length - 1]?.end_time || 0;
+    const progress = duration > 0 ? Math.max(0, Math.min(1, audioElement.currentTime / duration)) : 0;
+    const currentAdjusted = audioElement.currentTime + transcriptOffsetSeconds + (transcriptDriftSeconds * progress);
+    const delta = startTime - currentAdjusted;
+
+    if (progress > 0.2) {
+      const nextDrift = Math.max(-MAX_DRIFT_SECONDS, Math.min(MAX_DRIFT_SECONDS, transcriptDriftSeconds + (delta / progress)));
+      setTranscriptDrift(nextDrift, { refresh: false });
+    } else {
+      const nextOffset = Math.max(-MAX_BASE_OFFSET_SECONDS, Math.min(MAX_BASE_OFFSET_SECONDS, transcriptOffsetSeconds + delta));
+      setTranscriptOffset(nextOffset, { refresh: false });
+    }
     updateTranscriptForCurrentTime(audioElement.currentTime);
   }
 });
@@ -444,14 +639,39 @@ clearButton.addEventListener("click", clearForm);
 syncOffsetInput.addEventListener("input", () => {
   setTranscriptOffset(Number(syncOffsetInput.value));
 });
-syncEarlierButton.addEventListener("click", () => {
-  nudgeTranscriptOffset(-0.1);
+syncDriftInput.addEventListener("input", () => {
+  setTranscriptDrift(Number(syncDriftInput.value));
 });
-syncLaterButton.addEventListener("click", () => {
+syncEarlierButton.addEventListener("click", () => {
   nudgeTranscriptOffset(0.1);
 });
+syncLaterButton.addEventListener("click", () => {
+  nudgeTranscriptOffset(-0.1);
+});
+driftLessButton.addEventListener("click", () => {
+  nudgeTranscriptDrift(-0.5);
+});
+driftMoreButton.addEventListener("click", () => {
+  nudgeTranscriptDrift(0.5);
+});
 syncResetButton.addEventListener("click", () => {
-  setTranscriptOffset(0);
+  applySyncSettings({ offset: 0, drift: 0 });
+});
+calibrateStartButton.addEventListener("click", () => {
+  pendingCalibrationPoint = "start";
+  updateCalibrationStatus();
+});
+calibrateEndButton.addEventListener("click", () => {
+  pendingCalibrationPoint = "end";
+  updateCalibrationStatus();
+});
+clearCalibrationButton.addEventListener("click", () => {
+  pendingCalibrationPoint = null;
+  calibrationPoints = { start: null, end: null };
+  if (selectedJobId) {
+    window.localStorage.removeItem(calibrationSettingsKey(selectedJobId));
+  }
+  updateCalibrationStatus();
 });
 
 ["dragenter", "dragover"].forEach((eventName) => {
