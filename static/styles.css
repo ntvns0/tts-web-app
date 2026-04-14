@@ -54,29 +54,19 @@ body {
 }
 
 .brand-lockup {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   width: min(100%, 560px);
   margin-bottom: 1rem;
-  padding: 0.65rem 0.8rem;
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(24, 28, 41, 0.98), rgba(24, 28, 41, 0.92)),
-    var(--brand-night);
-  box-shadow:
-    0 20px 56px rgba(16, 18, 28, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  overflow: hidden;
 }
 
 .brand-logo-image {
   display: block;
-  width: min(100%, 450px);
+  width: 100%;
   height: auto;
-  border-radius: 16px;
-  filter:
-    drop-shadow(0 0 14px rgba(85, 127, 255, 0.14))
-    drop-shadow(0 12px 28px rgba(8, 11, 19, 0.18));
+  border-radius: inherit;
+  box-shadow: 0 20px 56px rgba(16, 18, 28, 0.16);
 }
 
 .hero h1,
@@ -1063,7 +1053,6 @@ button:hover,
 
   .brand-lockup {
     width: min(100%, 520px);
-    padding: 0.6rem 0.75rem;
   }
 
   .jobs-panel {
