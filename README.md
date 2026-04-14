@@ -1,62 +1,119 @@
-# TTS Web App
+# Rayline Echo
 
-A local-first text-to-speech web app built with FastAPI, premium Edge neural voices, Kokoro local premium voices, and Piper fallback voices.
+Turn documents, books, and notes into a personal audiobook library.
+
+Rayline Echo is a local-first web app for turning written content into a listenable experience. Import PDFs, EPUBs, Markdown, text files, and scanned documents, then build a private library you can queue, revisit, and continue listening to over time.
 
 Created by Nate Evans, with implementation assistance from OpenAI Codex.
 
-## Creator And Usage Terms
+## What Rayline Echo Does
 
-- Creator: Nate Evans
-- Assisted by: OpenAI Codex
-- Personal, educational, and non-commercial use is allowed
-- Commercial or for-profit use is not allowed without permission from Nate Evans
-- If you want to use this project for profit, contact Nate Evans first to arrange a one-time paid license
+Rayline Echo is built for people who want to listen to what they read.
 
-By using this repository, you agree to the terms in [LICENSE](LICENSE).
+- Turn books, papers, notes, articles, and drafts into long-form audio
+- Import PDFs, EPUBs, Markdown, TXT, CSV, and LOG files
+- Extract text from scanned or flattened PDFs with local OCR
+- Queue larger conversions and follow progress while your library builds
+- Keep a persistent audiobook library between sessions
+- Listen with playback controls, timeline scrubbing, and playback continuity
+- Follow along with synced read-along highlighting while audio plays
+- Organize your library with favorites, recents, renaming, filtering, search, and reprocessing
+- Use high-quality local voices with GPU acceleration when available
+- Optionally use cloud voices when you want a different listening style
 
-## Features
+## Supported Formats
 
-- Upload an EPUB, PDF, or plain text file, paste text, or drag and drop a file
-- Queue TTS jobs and watch chunk-by-chunk processing progress
-- Choose between more natural premium neural voices and offline local voices
-- Use Kokoro as the new primary local premium voice provider, with Piper kept as a fallback
-- Keep completed tracks in a selectable library that survives app restarts
-- Rename, favorite, filter, delete, and reprocess saved tracks from the library
-- Play, pause, skip forward/back 5 seconds, and scrub on a timeline
-- Follow the spoken text in a synced read-along viewer with word highlighting
-- Browse extracted PDF pages and EPUB chapters from a section rail, then jump directly into a section while listening
-- Watch queued and processing jobs from the create panel while renders are running
-- See live CPU and GPU load inside the web app while jobs are processing
-- Resume interrupted long-running Edge jobs from saved chunk checkpoints instead of restarting from zero
-- Auto-detect whether local ONNX voices are using GPU or CPU, with safe CPU fallback when CUDA runtime pieces are missing
+Rayline Echo currently supports:
 
-## Run
+- PDF
+- EPUB
+- Markdown
+- TXT
+- CSV
+- LOG
+
+For PDFs, Rayline Echo first attempts embedded text extraction. If a PDF is scanned, flattened, or image-based, it falls back to local OCR.
+
+## Voice Options
+
+Rayline Echo supports both local and cloud-backed voice workflows.
+
+### Local Voices
+
+Local voices are the best fit for private, long-form listening.
+
+- Kokoro local premium voices
+- Piper local fallback voices
+- Local GPU acceleration when supported by your system
+- Local-first processing for users who want privacy and control
+
+### Cloud Voices
+
+Optional cloud voices are available when you want a different voice profile or quality tradeoff.
+
+- Microsoft Edge neural voices
+- Useful when you want another voice style alongside your local library workflow
+
+## Why Rayline Echo Is Different
+
+Rayline Echo is not designed as a generic text-to-speech utility.
+
+It is designed as a listening product for real reading workflows: books, papers, notes, research, drafts, and personal documents. The focus is on turning written material into something you can actually live with over time: queue it, organize it, revisit it, and keep listening.
+
+What makes it different:
+
+- Local-first by design
+- Built around long-form listening, not one-off voice generation
+- Designed for personal libraries, not disposable conversions
+- OCR support for real-world PDFs that are not already machine-readable
+- Read-along playback with synchronized highlighting
+- Persistent library and queue workflow instead of one-time exports
+
+## Run Rayline Echo
+
+From the project directory:
 
 ```bash
 python3 -m pip install -r requirements.txt
 python3 -m uvicorn main:app --reload
 ```
 
-Open `http://127.0.0.1:8000`.
+Then open:
 
-## Notes
+```text
+http://127.0.0.1:8000
+```
 
-- The app offers higher-quality Microsoft Edge neural voices by default. These require internet access during synthesis.
-- The app keeps Kokoro model assets in `./models/kokoro` and Piper fallback voices in `./models`.
-- Kokoro local voices now provide the best fully offline quality in the app, while Piper remains available as a lighter fallback.
-- Local ONNX voices can use GPU through ONNX Runtime when `onnxruntime-gpu` and the required CUDA/cuDNN libraries are available. Otherwise they fall back to CPU automatically and the UI will say so.
-- Uploaded files must be under 5 MB. Text files must be UTF-8.
-- PDF uploads first use embedded text extraction, then fall back to local OCR for scanned/image PDFs.
-- EPUB uploads extract chapter/document text and feed it into the same TTS and synced transcript flow.
-- Long-form documents now keep their extracted sections so the reader can show chapter or page navigation above the transcript.
-- The saved library can filter by favorites, recent listens, pasted text, PDF, EPUB, and text-file sources.
-- Generated `data/` files and downloaded `models/` are intentionally ignored by git.
-- Track metadata is stored locally so completed audio files show back up in the library after you restart the app.
-- Uploaded text files use their source filename for the generated audio. Pasted text can use a user-supplied title or an automatic title based on the opening words.
+To make it available on your local network:
 
-## Terminal Monitoring
+```bash
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-Use the bundled monitor script while long jobs run:
+## Setup Notes
+
+- Uploaded files must be under 5 MB
+- Text-based uploads should be UTF-8
+- EPUB and PDF imports preserve sections when possible for easier navigation
+- Scanned PDFs use local OCR when embedded text is unavailable
+- Long-form local synthesis uses chunked processing and adaptive fallback for better reliability
+- Generated data is stored locally and intentionally ignored by git
+
+## Privacy And Local-First Design
+
+Rayline Echo is built to keep your reading and listening workflow close to your own machine.
+
+- Local voices run on your hardware
+- OCR runs locally
+- Files and generated audio stay in your local app data
+- Persistent library metadata is stored locally
+- Cloud voice options are optional, not required
+
+If you prefer a fully local workflow, you can stay on local voices and avoid cloud-backed synthesis entirely.
+
+## Monitoring
+
+If you want to watch active conversions and system load from the terminal:
 
 ```bash
 python3 monitor.py jobs
@@ -66,12 +123,27 @@ python3 monitor.py gpu
 python3 monitor.py watch --interval 3
 ```
 
-`watch` combines queued/processing TTS jobs, top processes, CPU activity, and GPU usage when `nvidia-smi` is available.
+`watch` combines queued conversions, top processes, CPU activity, and GPU usage when `nvidia-smi` is available.
 
-## Licensing
+## Technical Stack
 
-This project is source-available under a custom non-commercial license.
+Rayline Echo is built with:
 
-- You may use, study, modify, and share the code for non-commercial purposes
-- You may not use this code in any commercial, business, paid, or for-profit setting without permission
-- For commercial licensing, contact Nate Evans through GitHub: <https://github.com/ntvns0>
+- FastAPI
+- Kokoro ONNX for premium local voices
+- Piper for lightweight local fallback voices
+- Edge TTS for optional cloud voices
+- pypdf for PDF extraction
+- RapidOCR for scanned PDF OCR
+- ebooklib plus BeautifulSoup for EPUB extraction
+
+## Licensing Summary
+
+Rayline Echo is source-available under a custom non-commercial license.
+
+- Creator: Nate Evans
+- Built with assistance from OpenAI Codex
+- Personal, educational, and other non-commercial use is allowed
+- Commercial or for-profit use requires permission from Nate Evans and a one-time paid license
+
+By using this repository, you agree to the terms in [LICENSE](LICENSE).

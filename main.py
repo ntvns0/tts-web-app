@@ -189,7 +189,7 @@ class Job:
         return data
 
 
-app = FastAPI(title="TTS Web App")
+app = FastAPI(title="Rayline Echo")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
@@ -487,13 +487,13 @@ def assign_section_timings(words: list[dict[str, Any]], sections: list[dict[str,
 def slugify(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
     value = re.sub(r"-{2,}", "-", value).strip("-")
-    return value or "untitled-track"
+    return value or "untitled-audiobook"
 
 
 def derive_paste_title(text: str) -> str:
     words = re.findall(r"[A-Za-z0-9']+", text)
     if not words:
-        return "Untitled Track"
+        return "Untitled Audiobook"
     short_title = " ".join(words[:6]).strip()
     if len(words) > 6:
         short_title += "..."
@@ -1298,7 +1298,7 @@ def update_job(
     if "title" in payload:
         title = clean_text(str(payload.get("title", "")))
         if not title:
-            raise HTTPException(status_code=400, detail="Track title cannot be empty.")
+            raise HTTPException(status_code=400, detail="Title cannot be empty.")
         updates["title"] = title[:160]
     if "favorite" in payload:
         updates["favorite"] = bool(payload.get("favorite"))
@@ -1348,7 +1348,7 @@ def resume_job(job_id: str) -> dict[str, Any]:
         if job.provider != "edge" or not job.checkpoint_path or not Path(job.checkpoint_path).exists():
             raise HTTPException(status_code=400, detail="This job does not have resumable Edge checkpoints.")
         if job.state == "completed":
-            raise HTTPException(status_code=400, detail="Completed jobs do not need resuming.")
+            raise HTTPException(status_code=400, detail="Completed titles do not need resuming.")
         if job.state in {"queued", "processing"}:
             raise HTTPException(status_code=400, detail="This job is already active.")
         job.state = "queued"
@@ -1367,7 +1367,7 @@ def reprocess_job(
 ) -> dict[str, Any]:
     voice_id = str(payload.get("voice") or "").strip()
     if not voice_id:
-        raise HTTPException(status_code=400, detail="Choose a voice for reprocessing.")
+        raise HTTPException(status_code=400, detail="Choose a voice to create another version.")
     get_voice_config(voice_id)
 
     with jobs_lock:
@@ -1382,7 +1382,7 @@ def reprocess_job(
         source_favorite = job.favorite
 
     if not transcript_path.exists():
-        raise HTTPException(status_code=404, detail="Original transcript text is missing for this track.")
+        raise HTTPException(status_code=404, detail="Original source text is missing for this title.")
 
     text = transcript_path.read_text(encoding="utf-8")
     sections: list[dict[str, Any]] = []
@@ -1426,7 +1426,7 @@ async def create_job(
 
     merged_text = clean_text(file_text or text)
     if not merged_text:
-        raise HTTPException(status_code=400, detail="Paste text or upload a text file.")
+        raise HTTPException(status_code=400, detail="Paste text or upload a reading source.")
 
     if filename:
         resolved_title = Path(filename).stem

@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TTS Studio</title>
+  <title>Rayline Echo</title>
+  <link rel="icon" type="image/png" href="/static/branding/rayline_favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -16,18 +17,33 @@
 <body>
   <main class="shell">
     <section class="hero">
-      <p class="eyebrow">Text To Speech</p>
-      <h1>Turn raw text files into playable audio with live processing status.</h1>
+      <div class="brand-lockup" aria-label="Rayline">
+        <img
+          class="brand-logo-image"
+          src="/static/branding/Rayline_logo.png"
+          alt="Rayline logo"
+          width="902"
+          height="316" />
+      </div>
+      <p class="eyebrow">Rayline Echo</p>
+      <h1>Turn anything into an audiobook.</h1>
       <p class="lede">
-        Drop a text file, upload one manually, or paste content directly. We synthesize
-        it into audio, show chunk-by-chunk progress, and keep finished tracks ready in a
-        custom player.
+        Rayline Echo turns books, documents, papers, and notes into a private, listenable library
+        you can build over time.
       </p>
+      <p class="lede">
+        Import PDFs, EPUBs, Markdown, text files, and scanned documents. Process locally, queue
+        long jobs, and keep listening where you left off.
+      </p>
+      <div class="hero-product">
+        <span class="suite-tag">Rayline Suite</span>
+        <span class="product-pill">Echo</span>
+      </div>
       <div class="credit-banner">
         <p><strong>Created by Nate Evans</strong> with implementation assistance from OpenAI Codex.</p>
         <p>
-          Free for personal and non-commercial use. For any for-profit or commercial use,
-          contact Nate Evans first for a one-time paid license.
+          Free for personal and non-commercial use. Commercial use requires permission
+          and a one-time paid license.
         </p>
       </div>
     </section>
@@ -35,39 +51,39 @@
     <section class="workspace">
       <section class="panel intake-panel">
         <div class="panel-header">
-          <h2>Create A Track</h2>
+          <h2>Add To Library</h2>
           <label class="voice-picker">
             <span>Voice</span>
             <select id="voice-select"></select>
           </label>
         </div>
         <p id="voice-description" class="voice-description">
-          Most natural voices use online neural synthesis. Local Kokoro premium voices and Piper fallback voices remain available offline.
+          Choose a local or cloud voice for this audiobook. Local voices keep processing on your machine whenever possible.
         </p>
 
         <form id="tts-form" class="intake-form">
           <label id="dropzone" class="dropzone" for="file-input" tabindex="0"
             aria-label="Upload or drag and drop an EPUB, PDF, or text file">
             <input id="file-input" name="file" type="file" accept=".epub,.pdf,.txt,.md,.log,.csv" hidden />
-            <span class="dropzone-kicker">Drag and drop</span>
-            <strong>Drop an EPUB, PDF, or text file here</strong>
-            <span>or click to browse for an EPUB, PDF, TXT, MD, CSV, or LOG file</span>
+            <span class="dropzone-kicker">Import reading material</span>
+            <strong>Drop a PDF, EPUB, Markdown, or text file here</strong>
+            <span>or browse for a reading source from your device</span>
             <span id="selected-file" class="selected-file">No file selected</span>
           </label>
 
           <label class="text-field">
-            <span>Track name for pasted text</span>
+            <span>Audiobook title</span>
             <input id="title-input" name="title" type="text"
-              placeholder="Optional. If blank, we will name it from the opening words." />
+              placeholder="Optional. If left blank, Rayline Echo will name it from the source text." />
           </label>
 
           <label class="text-field">
-            <span>Paste text</span>
-            <textarea id="text-input" name="text" placeholder="Paste an article, notes, or a script here..."></textarea>
+            <span>Paste notes or text</span>
+            <textarea id="text-input" name="text" placeholder="Paste an article, chapter, draft, or reading notes here..."></textarea>
           </label>
 
           <div class="actions">
-            <button type="submit" class="primary-button">Start Processing</button>
+            <button type="submit" class="primary-button">Add to queue</button>
             <button type="button" id="clear-button" class="ghost-button">Clear</button>
           </div>
         </form>
@@ -75,13 +91,13 @@
         <section class="queue-panel">
           <div class="queue-panel-header">
             <div>
-              <p class="track-label">Active Queue</p>
-              <h3 id="queue-panel-title">No jobs running</h3>
+              <p class="track-label">Queue</p>
+              <h3 id="queue-panel-title">Nothing is being prepared right now</h3>
             </div>
             <span id="queue-panel-count" class="queue-panel-count">0 active</span>
           </div>
           <div id="active-job-list" class="active-job-list">
-            <div class="empty-state">Queued and processing tracks will appear here while they work.</div>
+            <div class="empty-state">Items you add will appear here while Rayline Echo prepares them for listening.</div>
           </div>
         </section>
 
@@ -124,20 +140,20 @@
         <div class="panel-header library-header">
           <div>
             <h2>Your Library</h2>
-            <p>Completed tracks stay here between sessions and can be managed like saved projects.</p>
+            <p>A persistent library of audiobooks created from your documents, books, and notes.</p>
           </div>
-          <p id="job-count">0 jobs</p>
+          <p id="job-count">0 titles</p>
         </div>
         <div class="library-toolbar">
           <label class="library-search">
             <span>Search</span>
-            <input id="library-search" type="search" placeholder="Find a track, filename, or preview text" />
+            <input id="library-search" type="search" placeholder="Search your library" />
           </label>
           <div class="library-toolbar-row">
             <label class="library-filter">
               <span>Show</span>
               <select id="library-filter">
-                <option value="all">All tracks</option>
+                <option value="all">All titles</option>
                 <option value="favorites">Favorites</option>
                 <option value="recent">Recent</option>
                 <option value="paste">Pasted text</option>
@@ -160,7 +176,7 @@
         </div>
         <div class="library-scroll">
           <div id="job-list" class="job-list">
-            <div class="empty-state">No tracks yet. Submit text to start building your library.</div>
+            <div class="empty-state">Your library is empty. Add a document, book, or note to create your first audiobook.</div>
           </div>
         </div>
       </aside>
@@ -169,8 +185,8 @@
     <section class="panel player-panel">
       <div class="panel-header">
         <div>
-          <h2>Player</h2>
-          <p id="player-subtitle">Choose a completed track to listen.</p>
+          <h2>Now Listening</h2>
+          <p id="player-subtitle">Choose something from your library to start listening.</p>
         </div>
         <a id="download-link" class="ghost-link hidden" href="#">Download WAV</a>
       </div>
@@ -178,7 +194,7 @@
       <div class="player-card">
         <div class="player-topbar">
           <div class="track-meta">
-            <p class="track-label">Selected Track</p>
+            <p class="track-label">Current Title</p>
             <h3 id="track-title">Nothing selected</h3>
             <p id="track-voice" class="track-voice">No voice selected</p>
           </div>
@@ -201,17 +217,17 @@
         <div class="reader-header">
           <div>
             <p class="track-label">Read Along</p>
-            <h3>Synced Transcript</h3>
+            <h3>Synced Reading View</h3>
           </div>
-          <p id="reader-mode" class="reader-mode">Waiting for a completed track</p>
+          <p id="reader-mode" class="reader-mode">Waiting for a completed title</p>
         </div>
         <div class="section-panel">
           <div class="section-panel-header">
-            <p class="track-label">Sections</p>
+            <p class="track-label">Chapters</p>
             <span id="section-count" class="section-count">No sections yet</span>
           </div>
           <div id="section-nav" class="section-nav">
-            <p class="transcript-empty">Load a completed track to browse chapters or pages.</p>
+            <p class="transcript-empty">Chapter or section markers will appear here when available.</p>
           </div>
         </div>
         <div class="reader-controls">
@@ -258,7 +274,7 @@
           </p>
         </div>
         <div id="transcript-viewer" class="transcript-viewer">
-          <p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>
+          <p class="transcript-empty">Choose a completed title to follow along as it plays.</p>
         </div>
       </div>
 
@@ -269,7 +285,7 @@
       <div class="panel-header">
         <div>
           <h2>Creator And License</h2>
-          <p>Clear ownership and usage terms for this project.</p>
+          <p>Clear authorship and usage terms for Rayline Echo.</p>
         </div>
       </div>
       <div class="ownership-copy">

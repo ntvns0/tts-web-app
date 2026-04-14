@@ -210,11 +210,11 @@ function updateCalibrationStatus() {
     return;
   }
   if (calibrationPoints.start && calibrationPoints.end) {
-    calibrationStatus.textContent = "Two-point calibration saved for this track.";
+    calibrationStatus.textContent = "Two-point calibration saved for this title.";
     return;
   }
   if (calibrationPoints.start) {
-    calibrationStatus.textContent = "Start point saved. Move later in the track, press Set End Point, then click the matching word.";
+    calibrationStatus.textContent = "Start point saved. Move later in the title, press Set End Point, then click the matching word.";
     return;
   }
   calibrationStatus.textContent = "Two-point calibration: set a start point, then an end point, then click the matching transcript words.";
@@ -318,15 +318,15 @@ function formatRelativeTime(timestamp) {
   }
   const secondsAgo = Math.max(0, Math.round((Date.now() / 1000) - timestamp));
   if (secondsAgo < 60) {
-    return "Played just now";
+    return "Listened just now";
   }
   if (secondsAgo < 3600) {
-    return `Played ${Math.floor(secondsAgo / 60)}m ago`;
+    return `Listened ${Math.floor(secondsAgo / 60)}m ago`;
   }
   if (secondsAgo < 86400) {
-    return `Played ${Math.floor(secondsAgo / 3600)}h ago`;
+    return `Listened ${Math.floor(secondsAgo / 3600)}h ago`;
   }
-  return `Played ${Math.floor(secondsAgo / 86400)}d ago`;
+  return `Listened ${Math.floor(secondsAgo / 86400)}d ago`;
 }
 
 function formatDurationCompact(totalSeconds) {
@@ -365,12 +365,12 @@ function processingMeta(job) {
     if (progress > 0.03) {
       const estimatedTotal = elapsed / progress;
       const remaining = Math.max(0, estimatedTotal - elapsed);
-      return `Running ${formatDurationCompact(elapsed)} • ETA ${formatDurationCompact(remaining)}`;
+      return `Preparing for ${formatDurationCompact(elapsed)} • ETA ${formatDurationCompact(remaining)}`;
     }
-    return `Running ${formatDurationCompact(elapsed)}`;
+    return `Preparing for ${formatDurationCompact(elapsed)}`;
   }
   if (job.state === "completed" && Number.isFinite(Number(job.completed_in_seconds))) {
-    return `Completed in ${formatDurationCompact(Number(job.completed_in_seconds))}`;
+    return `Ready in ${formatDurationCompact(Number(job.completed_in_seconds))}`;
   }
   if (job.state === "failed" && Number.isFinite(elapsed) && elapsed > 0) {
     return `Stopped after ${formatDurationCompact(elapsed)}`;
@@ -391,11 +391,11 @@ function renderActiveQueue() {
   const activeJobs = activeQueueJobs();
   queuePanelCount.textContent = `${activeJobs.length} active`;
   queuePanelTitle.textContent = activeJobs.length
-    ? `${activeJobs.filter((job) => job.state === "processing").length || 0} processing • ${activeJobs.filter((job) => job.state === "queued").length || 0} queued`
-    : "No jobs running";
+    ? `${activeJobs.filter((job) => job.state === "processing").length || 0} preparing • ${activeJobs.filter((job) => job.state === "queued").length || 0} queued`
+    : "Nothing is being prepared right now";
 
   if (!activeJobs.length) {
-    activeJobList.innerHTML = `<div class="empty-state">Queued and processing tracks will appear here while they work.</div>`;
+    activeJobList.innerHTML = `<div class="empty-state">Items you add will appear here while Rayline Echo prepares them for listening.</div>`;
     return;
   }
 
@@ -407,13 +407,13 @@ function renderActiveQueue() {
     item.innerHTML = `
       <div class="active-job-topline">
         <strong>${job.title}</strong>
-        <span class="status-pill status-${job.state}">${job.state === "processing" ? "Processing" : `Queued #${index + 1 - activeJobs.filter((entry) => entry.state === "processing").length}`}</span>
+        <span class="status-pill status-${job.state}">${job.state === "processing" ? "Preparing" : `Queued #${index + 1 - activeJobs.filter((entry) => entry.state === "processing").length}`}</span>
       </div>
       <p class="job-meta">${sourceTypeLabel(job)} • ${job.voice_label} • ${job.compute_target === "cloud" ? "cloud" : `local ${job.compute_target || "cpu"}`}</p>
       <div class="job-progress" aria-hidden="true">
         <span style="width:${job.state === "processing" ? progressPercent : 8}%"></span>
       </div>
-      <p class="job-meta">${processingMeta(job) || (job.state === "queued" ? "Waiting for earlier jobs to finish" : statusLabel(job))}</p>
+      <p class="job-meta">${processingMeta(job) || (job.state === "queued" ? "Waiting in queue" : statusLabel(job))}</p>
     `;
     activeJobList.appendChild(item);
   });
@@ -428,8 +428,8 @@ function renderSystemStatus() {
   const gpuBusy = Number(gpu.gpu_util_percent || 0);
 
   systemPanelTitle.textContent = activeQueueJobs().length
-    ? `Machine load while your queue is running • Local ONNX voices on ${piper.label}`
-    : `Machine load while the app is idle • Local ONNX voices on ${piper.label}`;
+    ? `Machine load while your queue is running • Local voices on ${piper.label}`
+    : `Machine load while the app is idle • Local voices on ${piper.label}`;
   systemPanelUpdated.textContent = formatUpdatedTime(systemStatus?.timestamp);
 
   cpuBusyPill.textContent = cpu.available ? `${cpuBusy}%` : "--";
@@ -499,7 +499,7 @@ function filteredJobs() {
 
 function statusLabel(job) {
   if (job.state === "processing") {
-    return `Processing ${Math.round(job.progress * 100)}%`;
+    return `Preparing ${Math.round(job.progress * 100)}%`;
   }
   if (job.state === "completed") {
     return "Ready";
@@ -512,13 +512,13 @@ function statusLabel(job) {
 
 function renderJobs() {
   const visibleJobs = filteredJobs();
-  jobCount.textContent = `${visibleJobs.length} ${visibleJobs.length === 1 ? "track" : "tracks"}`;
+  jobCount.textContent = `${visibleJobs.length} ${visibleJobs.length === 1 ? "title" : "titles"}`;
   if (!jobs.length) {
-    jobList.innerHTML = `<div class="empty-state">No tracks yet. Submit text to start building your library.</div>`;
+    jobList.innerHTML = `<div class="empty-state">Your library is empty. Add a document, book, or note to create your first audiobook.</div>`;
     return;
   }
   if (!visibleJobs.length) {
-    jobList.innerHTML = `<div class="empty-state">No saved tracks match this filter yet.</div>`;
+    jobList.innerHTML = `<div class="empty-state">No saved titles match this view yet.</div>`;
     return;
   }
 
@@ -544,24 +544,24 @@ function renderJobs() {
       <div class="job-progress" aria-hidden="true">
         <span style="width:${progressPercent}%"></span>
       </div>
-      <p class="job-meta">Chunks ${job.completed_chunks}/${job.total_chunks || "?"} • ${formatRelativeTime(job.last_played_at)} • ${job.duration_seconds ? `${formatTime(job.duration_seconds)} long` : "Waiting for audio"}</p>
+      <p class="job-meta">Sections ${job.completed_chunks}/${job.total_chunks || "?"} • ${formatRelativeTime(job.last_played_at)} • ${job.duration_seconds ? `${formatTime(job.duration_seconds)} long` : "Preparing audio"}</p>
       ${processingMeta(job) ? `<p class="job-timing">${processingMeta(job)}</p>` : ""}
       <p class="job-preview">${job.error || job.preview}</p>
       <div class="job-management">
         <div class="job-primary-actions">
-          <button type="button" class="library-button ${showResume ? "action-resume" : "action-listen"} ${job.id === selectedJobId ? "is-selected-action" : ""}" data-action="${showResume ? "resume" : "listen"}" data-job-id="${job.id}" ${canPlay || showResume ? "" : "disabled"}>${showResume ? "Resume" : job.id === selectedJobId ? "Selected" : "Listen"}</button>
+          <button type="button" class="library-button ${showResume ? "action-resume" : "action-listen"} ${job.id === selectedJobId ? "is-selected-action" : ""}" data-action="${showResume ? "resume" : "listen"}" data-job-id="${job.id}" ${canPlay || showResume ? "" : "disabled"}>${showResume ? "Resume" : job.id === selectedJobId ? "Current" : "Listen"}</button>
           <button type="button" class="library-button action-favorite" data-action="favorite" data-job-id="${job.id}">${job.favorite ? "Unfavorite" : "Favorite"}</button>
           <button type="button" class="library-button action-rename" data-action="rename" data-job-id="${job.id}">Rename</button>
         </div>
         <div class="job-actions job-actions-secondary">
           <label class="inline-select voice-inline-select">
-            <span>Reprocess voice</span>
+            <span>Create another version</span>
             <select data-job-id="${job.id}" class="reprocess-voice-select">
               ${availableVoices.map((voice) => `<option value="${voice.id}" ${voice.id === job.voice ? "selected" : ""}>${voice.label}</option>`).join("")}
             </select>
           </label>
           <div class="job-secondary-actions">
-            <button type="button" class="library-button action-reprocess" data-action="reprocess" data-job-id="${job.id}">Reprocess</button>
+            <button type="button" class="library-button action-reprocess" data-action="reprocess" data-job-id="${job.id}">Create version</button>
             <button type="button" class="library-button danger-button action-delete" data-action="delete" data-job-id="${job.id}">Delete</button>
           </div>
         </div>
@@ -579,8 +579,8 @@ function renderTranscript(data) {
   renderSectionNav(data);
 
   if (!data || !data.text || !data.words || !data.words.length) {
-    transcriptViewer.innerHTML = `<p class="transcript-empty">Transcript timing is not available for this track.</p>`;
-    readerMode.textContent = "No transcript timing available";
+    transcriptViewer.innerHTML = `<p class="transcript-empty">Read-along timing is not available for this title.</p>`;
+    readerMode.textContent = "Read-along timing is not available";
     return;
   }
 
@@ -615,7 +615,7 @@ function renderSectionNav(data) {
 
   if (!sections.length) {
     sectionCount.textContent = "No sections yet";
-    sectionNav.innerHTML = `<p class="transcript-empty">This track does not have chapter or page markers yet.</p>`;
+    sectionNav.innerHTML = `<p class="transcript-empty">Chapter or section markers will appear here when available.</p>`;
     return;
   }
 
@@ -777,9 +777,9 @@ async function loadTranscript(job) {
     activeSectionIndex = -1;
     loadedTranscriptJobId = null;
     sectionCount.textContent = "No sections yet";
-    sectionNav.innerHTML = `<p class="transcript-empty">Load a completed track to browse chapters or pages.</p>`;
-    transcriptViewer.innerHTML = `<p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>`;
-    readerMode.textContent = "Waiting for a completed track";
+    sectionNav.innerHTML = `<p class="transcript-empty">Chapter or section markers will appear here when available.</p>`;
+    transcriptViewer.innerHTML = `<p class="transcript-empty">Choose a completed title to follow along as it plays.</p>`;
+    readerMode.textContent = "Waiting for a completed title";
     return;
   }
   if (loadedTranscriptJobId === job.id && transcriptData) {
@@ -792,8 +792,8 @@ async function loadTranscript(job) {
     loadedTranscriptJobId = null;
     activeSectionIndex = -1;
     sectionCount.textContent = "No sections yet";
-    sectionNav.innerHTML = `<p class="transcript-empty">This track does not have chapter or page markers yet.</p>`;
-    transcriptViewer.innerHTML = `<p class="transcript-empty">Transcript timing is not available for this track.</p>`;
+    sectionNav.innerHTML = `<p class="transcript-empty">Chapter or section markers will appear here when available.</p>`;
+    transcriptViewer.innerHTML = `<p class="transcript-empty">Read-along timing is not available for this title.</p>`;
     readerMode.textContent = "Transcript unavailable";
     return;
   }
@@ -920,11 +920,11 @@ async function refreshJobsKeepingSelection() {
     downloadLink.classList.add("hidden");
     trackTitle.textContent = "Nothing selected";
     trackVoice.textContent = "No voice selected";
-    playerSubtitle.textContent = "Choose a completed track to listen.";
-    readerMode.textContent = "Waiting for a completed track";
-    transcriptViewer.innerHTML = `<p class="transcript-empty">Pick a finished track to follow the spoken text word by word.</p>`;
+    playerSubtitle.textContent = "Choose something from your library to start listening.";
+    readerMode.textContent = "Waiting for a completed title";
+    transcriptViewer.innerHTML = `<p class="transcript-empty">Choose a completed title to follow along as it plays.</p>`;
     sectionCount.textContent = "No sections yet";
-    sectionNav.innerHTML = `<p class="transcript-empty">Load a completed track to browse chapters or pages.</p>`;
+    sectionNav.innerHTML = `<p class="transcript-empty">Chapter or section markers will appear here when available.</p>`;
   }
 }
 
@@ -936,7 +936,7 @@ async function patchJob(jobId, payload) {
   });
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || "Unable to update track.");
+    throw new Error(error.detail || "Unable to update this title.");
   }
   return response.json();
 }
@@ -947,7 +947,7 @@ async function deleteJob(jobId) {
   });
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || "Unable to delete track.");
+    throw new Error(error.detail || "Unable to delete this title.");
   }
   return response.json();
 }
@@ -960,7 +960,7 @@ async function reprocessJob(jobId, voice) {
   });
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || "Unable to reprocess track.");
+    throw new Error(error.detail || "Unable to create another version.");
   }
   return response.json();
 }
@@ -971,7 +971,7 @@ async function resumeJob(jobId) {
   });
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || "Unable to resume track.");
+    throw new Error(error.detail || "Unable to resume this title.");
   }
   return response.json();
 }
@@ -994,7 +994,7 @@ async function submitJob(event) {
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || "Unable to create TTS job.");
+    alert(error.detail || "Unable to add this item to the queue.");
     return;
   }
 
@@ -1010,12 +1010,12 @@ async function renameTrack(jobId) {
   if (!current) {
     return;
   }
-  const nextTitle = window.prompt("Rename this track:", current.title);
+  const nextTitle = window.prompt("Rename this title:", current.title);
   if (nextTitle === null) {
     return;
   }
   if (!nextTitle.trim()) {
-    window.alert("Track title cannot be empty.");
+    window.alert("Title cannot be empty.");
     return;
   }
   await patchJob(jobId, { title: nextTitle.trim() });
@@ -1215,7 +1215,7 @@ jobList.addEventListener("click", async (event) => {
       await queueReprocess(jobId);
     }
   } catch (error) {
-    window.alert(error.message || "Something went wrong while updating the library.");
+    window.alert(error.message || "Something went wrong while updating your library.");
   }
 });
 
