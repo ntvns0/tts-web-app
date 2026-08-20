@@ -65,6 +65,7 @@ def build() -> int:
         "PyInstaller",
         "--noconfirm",
         "--clean",
+        "--onedir",
         "--windowed",
         "--name",
         APP_NAME,

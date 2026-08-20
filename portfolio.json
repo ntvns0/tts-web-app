@@ -1,0 +1,26 @@
+{
+  "project_id": "PRJ-017",
+  "slug": "rayline-echo",
+  "title": "Rayline Echo",
+  "category": "Audio Systems",
+  "tech_stack": "FastAPI, Python, Kokoro, Piper, Edge TTS, OCR, PyInstaller",
+  "summary": "Local-first document-to-audiobook library with OCR, queues, voices, and read-along playback.",
+  "status": "active",
+  "preview_dir": "static",
+  "preview_entry": "index.html",
+  "run_commands": [
+    "python3 -m uvicorn main:app --host 127.0.0.1 --port 5209",
+    "python3 desktop_app.py",
+    "python3 build_desktop.py"
+  ],
+  "services": [
+    {
+      "slug": "api",
+      "label": "Echo FastAPI app",
+      "command": "python3 -m uvicorn main:app --host 127.0.0.1 --port 5209",
+      "open_url": "http://127.0.0.1:5209",
+      "health_url": "http://127.0.0.1:5209",
+      "description": "Starts Rayline Echo's FastAPI app with the full backend available."
+    }
+  ]
+}

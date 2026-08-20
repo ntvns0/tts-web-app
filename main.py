@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import json
+import logging
 import queue
 import re
 import subprocess
@@ -28,33 +29,32 @@ from fastapi.staticfiles import StaticFiles
 from kokoro_onnx import Kokoro
 from piper import PiperVoice
 from piper.download_voices import download_voice
-from platformdirs import user_data_dir
 from pypdf import PdfReader
 try:
     import pypdfium2 as pdfium
 except ImportError:  # pragma: no cover - optional until desktop dependencies are installed
     pdfium = None
 from rapidocr_onnxruntime import RapidOCR
+from app_logging import configure_logging
+from app_paths import get_runtime_paths
 from monitor import get_cpu_snapshot, get_gpu_snapshot
 
-APP_NAME = "Rayline Echo"
-APP_AUTHOR = "Rayline"
-BASE_DIR = Path(__file__).resolve().parent
-RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", BASE_DIR))
-STATIC_DIR = RESOURCE_DIR / "static"
-if getattr(sys, "frozen", False):
-    APP_STATE_DIR = Path(user_data_dir(APP_NAME, APP_AUTHOR))
-    DATA_DIR = APP_STATE_DIR / "data"
-    MODELS_DIR = APP_STATE_DIR / "models"
-else:
-    DATA_DIR = BASE_DIR / "data"
-    MODELS_DIR = BASE_DIR / "models"
-UPLOADS_DIR = DATA_DIR / "uploads"
-AUDIO_DIR = DATA_DIR / "audio"
-TRANSCRIPTS_DIR = DATA_DIR / "transcripts"
-JOBS_DIR = DATA_DIR / "jobs"
-CHECKPOINTS_DIR = DATA_DIR / "checkpoints"
-KOKORO_DIR = MODELS_DIR / "kokoro"
+PATHS = get_runtime_paths()
+APP_NAME = PATHS.app_name
+APP_AUTHOR = PATHS.app_author
+BASE_DIR = PATHS.base_dir
+RESOURCE_DIR = PATHS.resource_dir
+STATIC_DIR = PATHS.static_dir
+APP_STATE_DIR = PATHS.app_state_dir
+DATA_DIR = PATHS.data_dir
+MODELS_DIR = PATHS.models_dir
+UPLOADS_DIR = PATHS.uploads_dir
+AUDIO_DIR = PATHS.audio_dir
+TRANSCRIPTS_DIR = PATHS.transcripts_dir
+JOBS_DIR = PATHS.jobs_dir
+CHECKPOINTS_DIR = PATHS.checkpoints_dir
+LOGS_DIR = PATHS.logs_dir
+KOKORO_DIR = PATHS.kokoro_dir
 MAX_FILE_SIZE = 5 * 1024 * 1024
 CHUNK_LIMIT = 350
 CHUNK_GAP_SECONDS = 0.18
@@ -64,6 +64,7 @@ KOKORO_MODEL_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/downloa
 KOKORO_VOICES_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
 KOKORO_MODEL_PATH = KOKORO_DIR / "kokoro-v1.0.onnx"
 KOKORO_VOICES_PATH = KOKORO_DIR / "voices-v1.0.bin"
+logger = configure_logging(LOGS_DIR / "server.log", "rayline.server")
 
 VOICE_CATALOG: dict[str, dict[str, str]] = {
     "edge:en-US-EmmaMultilingualNeural": {
@@ -167,11 +168,6 @@ VOICE_CATALOG: dict[str, dict[str, str]] = {
 }
 DEFAULT_VOICE = "edge:en-US-EmmaMultilingualNeural"
 
-for directory in (STATIC_DIR, DATA_DIR, UPLOADS_DIR, AUDIO_DIR, TRANSCRIPTS_DIR, JOBS_DIR, CHECKPOINTS_DIR, MODELS_DIR):
-    directory.mkdir(parents=True, exist_ok=True)
-KOKORO_DIR.mkdir(parents=True, exist_ok=True)
-
-
 @dataclass
 class Job:
     id: str
@@ -247,10 +243,75 @@ kokoro_runtime_note: str | None = None
 worker_started = False
 ocr_lock = threading.Lock()
 ocr_engine: RapidOCR | None = None
+startup_timestamp = time.time()
+last_runtime_error: dict[str, Any] | None = None
 
 
 class JobDeletedError(Exception):
     pass
+
+
+def record_runtime_error(source: str, message: str) -> None:
+    global last_runtime_error
+    last_runtime_error = {
+        "source": source,
+        "message": message,
+        "timestamp": time.time(),
+    }
+
+
+def find_last_logged_error() -> dict[str, Any] | None:
+    log_candidates = [
+        ("server", LOGS_DIR / "server.log"),
+        ("desktop server", LOGS_DIR / "desktop-server.log"),
+        ("desktop launcher", LOGS_DIR / "desktop-launcher.log"),
+    ]
+    patterns = (" ERROR ", "Traceback", " failed", " exception")
+
+    for source, path in log_candidates:
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        for line in reversed(lines[-200:]):
+            lowered = line.lower()
+            if any(pattern.strip().lower() in lowered for pattern in patterns):
+                return {
+                    "source": source,
+                    "message": line.strip(),
+                    "timestamp": path.stat().st_mtime,
+                }
+    return None
+
+
+def runtime_health() -> dict[str, Any]:
+    with jobs_lock:
+        queued_count = sum(1 for job in jobs.values() if job.state == "queued")
+        processing_count = sum(1 for job in jobs.values() if job.state == "processing")
+        failed_count = sum(1 for job in jobs.values() if job.state == "failed")
+
+    return {
+        "app_name": APP_NAME,
+        "packaged": PATHS.packaged,
+        "uptime_seconds": round(max(0.0, time.time() - startup_timestamp), 2),
+        "paths": {
+            "state": str(APP_STATE_DIR),
+            "data": str(DATA_DIR),
+            "models": str(MODELS_DIR),
+            "logs": str(LOGS_DIR),
+        },
+        "worker": {
+            "started": worker_started,
+            "alive": any(thread.name == "tts-worker" and thread.is_alive() for thread in threading.enumerate()),
+            "queue_size": job_queue.qsize(),
+            "queued_jobs": queued_count,
+            "processing_jobs": processing_count,
+            "failed_jobs": failed_count,
+        },
+        "last_error": last_runtime_error or find_last_logged_error(),
+    }
 
 
 def get_voice_config(voice_id: str) -> dict[str, str]:
@@ -290,14 +351,17 @@ def ensure_piper_voice(voice_name: str) -> Path:
     config_path = MODELS_DIR / f"{voice_name}.onnx.json"
     if model_path.exists() and config_path.exists():
         return model_path
+    logger.info("Downloading Piper voice assets for %s", voice_name)
     download_voice(voice_name, MODELS_DIR)
     return model_path
 
 
 def ensure_kokoro_assets() -> tuple[Path, Path]:
     if not KOKORO_MODEL_PATH.exists():
+        logger.info("Downloading Kokoro model assets to %s", KOKORO_MODEL_PATH)
         urlretrieve(KOKORO_MODEL_URL, KOKORO_MODEL_PATH)
     if not KOKORO_VOICES_PATH.exists():
+        logger.info("Downloading Kokoro voice assets to %s", KOKORO_VOICES_PATH)
         urlretrieve(KOKORO_VOICES_URL, KOKORO_VOICES_PATH)
     return KOKORO_MODEL_PATH, KOKORO_VOICES_PATH
 
@@ -1063,6 +1127,8 @@ def synthesize_job(job_id: str) -> None:
         voice_id = job.voice
         checkpoint_dir = Path(job.checkpoint_path) if job.checkpoint_path else CHECKPOINTS_DIR / job_id
 
+    logger.info("Starting job %s (%s) with voice %s", job_id, job.title, voice_id)
+
     voice_config = get_voice_config(voice_id)
     transcript_source = json.loads(transcript_data_path.read_text(encoding="utf-8")) if transcript_data_path and transcript_data_path.exists() else {}
     text = transcript_path.read_text(encoding="utf-8")
@@ -1106,16 +1172,21 @@ def synthesize_job(job_id: str) -> None:
         completed_at=time.time(),
     )
     remove_checkpoint(str(checkpoint_dir))
+    logger.info("Completed job %s (%s)", job_id, job.title)
 
 
 def worker() -> None:
+    logger.info("Background worker started")
     while True:
         job_id = job_queue.get()
         try:
             synthesize_job(job_id)
         except JobDeletedError:
+            logger.info("Skipped deleted job %s", job_id)
             pass
         except Exception as exc:  # pragma: no cover
+            record_runtime_error("worker", f"Job {job_id} failed: {exc}")
+            logger.exception("Job %s failed", job_id)
             if job_exists(job_id):
                 try:
                     set_job(job_id, state="failed", error=str(exc), completed_at=time.time())
@@ -1210,6 +1281,7 @@ def create_job_from_text(
 @app.on_event("startup")
 def startup() -> None:
     global worker_started
+    logger.info("Starting %s (packaged=%s)", APP_NAME, PATHS.packaged)
     ensure_piper_voice("en_US-ryan-high")
     ensure_piper_voice("en_US-lessac-medium")
     restore_jobs_from_disk()
@@ -1218,6 +1290,7 @@ def startup() -> None:
         thread = threading.Thread(target=worker, daemon=True, name="tts-worker")
         thread.start()
         worker_started = True
+    logger.info("Startup complete. State dir: %s", APP_STATE_DIR)
 
 
 @app.get("/")
@@ -1276,6 +1349,8 @@ def list_jobs() -> dict[str, Any]:
     try:
         payload["system"] = system_status()
     except Exception:
+        record_runtime_error("api.jobs", "Combined jobs/system payload failed.")
+        logger.exception("Combined jobs/system payload failed")
         payload["system"] = {
             "timestamp": time.time(),
             "cpu": {"available": False, "summary": "CPU stats unavailable right now."},
@@ -1289,11 +1364,15 @@ def system_status() -> dict[str, Any]:
     try:
         cpu = get_cpu_snapshot()
     except Exception:
+        record_runtime_error("metrics.cpu", "CPU metrics failed.")
+        logger.exception("CPU metrics failed")
         cpu = {"available": False, "summary": "CPU stats unavailable right now."}
 
     try:
         gpu = get_gpu_snapshot()
     except Exception:
+        record_runtime_error("metrics.gpu", "GPU metrics failed.")
+        logger.exception("GPU metrics failed")
         gpu = {"available": False, "summary": "GPU stats unavailable right now."}
 
     return {
@@ -1302,6 +1381,13 @@ def system_status() -> dict[str, Any]:
         "gpu": gpu,
         "piper": get_piper_runtime(),
     }
+
+
+@app.get("/api/health")
+def health_status() -> dict[str, Any]:
+    status = runtime_health()
+    status["system"] = system_status()
+    return status
 
 
 @app.get("/api/jobs/{job_id}")

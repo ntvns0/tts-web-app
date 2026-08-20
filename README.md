@@ -107,6 +107,9 @@ python3 desktop_app.py
 
 This is an early packaging foundation, not the final one-click installer yet. The goal is still for users to download Rayline Echo, click its icon, and run it with the same basic experience across platforms. The desktop launcher now runs the app server in a separate process so playback, queue work, and the native window are less likely to interfere with one another.
 
+Rayline Echo now also writes desktop and server logs to a local `logs/` directory during development, and to your platform app-data folder in packaged builds. That gives us a much cleaner path for troubleshooting while the desktop experience is maturing.
+It also now opens with a startup screen that shows launch progress, health checks, and any launcher error details before handing off to the main app window.
+
 ## Build Desktop Bundles
 
 Rayline Echo now includes an early PyInstaller-based desktop build path.
@@ -123,11 +126,20 @@ Then build a desktop bundle for your current platform:
 python3 build_desktop.py
 ```
 
+For a Linux release target with a staged AppDir and distributable archive:
+
+```bash
+python3 build_linux_release.py
+```
+
 What this currently does:
 
 - packages the local app into a native desktop bundle
 - includes the static web UI assets
 - uses the Rayline Echo branding for the app icon where supported
+- keeps writable data, models, and logs in user-data locations for packaged builds instead of trying to write inside the bundle
+- stages a Linux AppDir and `.tar.gz` release archive
+- can build an AppImage too and will auto-download `appimagetool` if needed
 
 Current direction:
 

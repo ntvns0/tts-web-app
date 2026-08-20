@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.rayline.RaylineEcho.desktop</id>
+  <name>Rayline Echo</name>
+  <summary>Turn documents, books, and notes into a personal audiobook library</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>LicenseRef-RaylineEcho-NonCommercial</project_license>
+  <developer id="io.rayline">
+    <name>Nate Evans</name>
+  </developer>
+  <launchable type="desktop-id">io.rayline.RaylineEcho.desktop</launchable>
+  <description>
+    <p>Rayline Echo is a local-first app for turning documents, books, and notes into a private, listenable library.</p>
+    <p>It supports PDF, EPUB, Markdown, text files, OCR for scanned PDFs, persistent library management, and synced read-along playback.</p>
+  </description>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <keywords>
+    <keyword>audiobook</keyword>
+    <keyword>reading</keyword>
+    <keyword>pdf</keyword>
+    <keyword>epub</keyword>
+    <keyword>notes</keyword>
+  </keywords>
+  <url type="homepage">https://github.com/ntvns0/rayline-echo</url>
+</component>

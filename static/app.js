@@ -25,6 +25,17 @@ const gpuBusyPill = document.getElementById("gpu-busy-pill");
 const gpuSummary = document.getElementById("gpu-summary");
 const gpuMeterFill = document.getElementById("gpu-meter-fill");
 const gpuBreakdown = document.getElementById("gpu-breakdown");
+const healthPanelTitle = document.getElementById("health-panel-title");
+const healthPanelUpdated = document.getElementById("health-panel-updated");
+const healthModePill = document.getElementById("health-mode-pill");
+const healthAppSummary = document.getElementById("health-app-summary");
+const healthPaths = document.getElementById("health-paths");
+const healthWorkerPill = document.getElementById("health-worker-pill");
+const healthWorkerSummary = document.getElementById("health-worker-summary");
+const healthWorkerBreakdown = document.getElementById("health-worker-breakdown");
+const healthErrorPill = document.getElementById("health-error-pill");
+const healthErrorSummary = document.getElementById("health-error-summary");
+const healthErrorMeta = document.getElementById("health-error-meta");
 const demoVoiceSelect = document.getElementById("demo-voice-select");
 const demoPlayButton = document.getElementById("demo-play-button");
 const demoReadalong = document.getElementById("demo-readalong");
@@ -80,10 +91,11 @@ let calibrationPoints = {
   end: null,
 };
 let systemStatus = null;
+let healthStatus = null;
 const DEMO_TEXTS = {
   about: "Turn anything into an audiobook. Rayline Echo turns books, documents, papers, and notes into a private, listenable library you can build over time. Import PDFs, EPUBs, Markdown, text files, and scanned documents. Process locally, queue long jobs, and keep listening where you left off.",
   how: "Drop in a file or paste text, choose a voice, and add it to your library. Rayline Echo prepares it in the background, keeps your progress between sessions, and lets you return later to listen and follow along without starting over.",
-  ideas: "Use Rayline Echo for bedtime stories, Yoto-style content planning, school reading support, family read-alongs, project notes, study packets, Project Gutenberg text and EPUB files, or written material you want to turn into something you can actually listen to.",
+  ideas: "Use Rayline Echo for bedtime stories, custom Yoto content, school reading support, family read-alongs, project notes, study packets, Project Gutenberg text and EPUB files, or written material you want to turn into something you can actually listen to.",
 };
 let demoWords = [];
 let demoWordMap = [];
@@ -732,6 +744,53 @@ function renderSystemStatus() {
     : "VRAM -- • Temp --";
 }
 
+function renderHealthStatus() {
+  const worker = healthStatus?.worker || {};
+  const paths = healthStatus?.paths || {};
+  const lastError = healthStatus?.last_error || null;
+  const isPackaged = Boolean(healthStatus?.packaged);
+  const workerAlive = Boolean(worker.alive);
+  const workerStarted = Boolean(worker.started);
+  const queueSize = Number(worker.queue_size || 0);
+  const queuedJobs = Number(worker.queued_jobs || 0);
+  const processingJobs = Number(worker.processing_jobs || 0);
+  const failedJobs = Number(worker.failed_jobs || 0);
+
+  const workerLabel = workerAlive ? "Live" : workerStarted ? "Stalled" : "Idle";
+
+  healthPanelTitle.textContent = isPackaged
+    ? "Desktop-friendly runtime status"
+    : "Development runtime status";
+  healthPanelUpdated.textContent = formatUpdatedTime(healthStatus?.system?.timestamp || healthStatus?.timestamp);
+  healthModePill.textContent = isPackaged ? "Packaged" : "Dev";
+  healthAppSummary.textContent = healthStatus
+    ? `${healthStatus.app_name || "Rayline Echo"} • Uptime ${formatDurationCompact(healthStatus.uptime_seconds || 0)}`
+    : "Waiting for runtime details.";
+  healthPaths.textContent = healthStatus
+    ? `State: ${paths.state || "Unknown"} • Logs: ${paths.logs || "Unknown"}`
+    : "State path unavailable.";
+
+  healthWorkerPill.textContent = workerLabel;
+  healthWorkerSummary.textContent = healthStatus
+    ? workerAlive
+      ? "Background worker is active and ready to prepare titles."
+      : workerStarted
+        ? "The worker started but is not reporting as alive right now."
+        : "The worker has not started yet."
+    : "Waiting for worker status.";
+  healthWorkerBreakdown.textContent = healthStatus
+    ? `Queue ${queueSize} • Preparing ${processingJobs} • Queued ${queuedJobs} • Failed ${failedJobs}`
+    : "Queue -- • Preparing -- • Queued -- • Failed --";
+
+  healthErrorPill.textContent = lastError ? "Attention" : "Clear";
+  healthErrorSummary.textContent = lastError
+    ? lastError.message || "A recent runtime issue was reported."
+    : "No recent runtime errors reported.";
+  healthErrorMeta.textContent = lastError
+    ? `${lastError.source || "runtime"} • ${formatUpdatedTime(lastError.timestamp)}`
+    : `Logs: ${paths.logs || "Unavailable"}`;
+}
+
 function filteredJobs() {
   const filter = libraryFilterSelect.value;
   const query = librarySearchInput.value.trim().toLowerCase();
@@ -998,7 +1057,7 @@ function jumpToSection(index) {
     audioElement.currentTime = Math.max(0, section.start_time);
   }
 
-    if (Number.isFinite(section.char_start)) {
+  if (Number.isFinite(section.char_start)) {
     const targetWord = transcriptData?.words?.find((word) => word.char_start >= section.char_start);
     if (targetWord) {
       const wordElement = transcriptViewer.querySelector(`[data-word-index="${transcriptData.words.indexOf(targetWord)}"]`);
@@ -1186,6 +1245,7 @@ async function loadJobs() {
   renderJobs();
   renderActiveQueue();
   renderSystemStatus();
+  renderHealthStatus();
 }
 
 async function loadSystemStatus() {
@@ -1203,6 +1263,36 @@ async function loadSystemStatus() {
     };
   }
   renderSystemStatus();
+}
+
+async function loadHealthStatus() {
+  try {
+    const response = await fetch("/api/health");
+    if (!response.ok) {
+      throw new Error("Unable to load runtime health.");
+    }
+    healthStatus = await response.json();
+    if (healthStatus?.system) {
+      systemStatus = healthStatus.system;
+      renderSystemStatus();
+    }
+  } catch {
+    healthStatus = {
+      timestamp: Date.now() / 1000,
+      packaged: false,
+      uptime_seconds: 0,
+      paths: {},
+      worker: {
+        started: false,
+        alive: false,
+        queue_size: 0,
+        queued_jobs: 0,
+        processing_jobs: 0,
+        failed_jobs: 0,
+      },
+    };
+  }
+  renderHealthStatus();
 }
 
 async function refreshJobsKeepingSelection() {
@@ -1604,12 +1694,15 @@ async function init() {
   buildDemoTranscript();
   populateDemoVoices();
   renderSystemStatus();
+  renderHealthStatus();
   await loadVoices();
   updateSelectedFileLabel();
   await loadJobs();
   await loadSystemStatus();
+  await loadHealthStatus();
   setInterval(loadJobs, 1500);
   setInterval(loadSystemStatus, 3000);
+  setInterval(loadHealthStatus, 5000);
 }
 
 init();

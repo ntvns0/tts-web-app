@@ -5,24 +5,44 @@ import json
 import shutil
 import subprocess
 import sys
+import threading
 import time
-from pathlib import Path
+
+from app_paths import get_runtime_paths
+
+PATHS = get_runtime_paths()
+JOBS_DIR = PATHS.jobs_dir
+METRICS_CACHE_TTL = 2.0
+_cache_lock = threading.Lock()
+_metrics_cache: dict[str, tuple[float, dict[str, object]]] = {}
 
 
-BASE_DIR = Path(__file__).resolve().parent
-JOBS_DIR = BASE_DIR / "data" / "jobs"
-
-
-def run_command(command: list[str]) -> str:
-    result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+def run_command(command: list[str], timeout: float = 3.0) -> str:
+    result = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
     return result.stdout.strip()
 
 
-def get_cpu_snapshot() -> dict[str, object]:
+def cached_snapshot(cache_key: str, loader) -> dict[str, object]:
+    now = time.time()
+    with _cache_lock:
+        cached = _metrics_cache.get(cache_key)
+        if cached and now - cached[0] < METRICS_CACHE_TTL:
+            return cached[1]
+
+    snapshot = loader()
+    with _cache_lock:
+        _metrics_cache[cache_key] = (time.time(), snapshot)
+    return snapshot
+
+
+def _get_cpu_snapshot_uncached() -> dict[str, object]:
     if not shutil.which("vmstat"):
         return {"available": False, "summary": "CPU stats unavailable on this machine."}
 
-    output = run_command(["vmstat", "1", "2"])
+    try:
+        output = run_command(["vmstat", "1", "2"], timeout=3.5)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        return {"available": False, "summary": "CPU stats unavailable right now."}
     lines = [line for line in output.splitlines() if line.strip()]
     if len(lines) < 3:
         return {"available": False, "summary": "CPU stats unavailable on this machine."}
@@ -48,15 +68,22 @@ def get_cpu_snapshot() -> dict[str, object]:
     }
 
 
-def get_gpu_snapshot() -> dict[str, object]:
+def get_cpu_snapshot() -> dict[str, object]:
+    return cached_snapshot("cpu", _get_cpu_snapshot_uncached)
+
+
+def _get_gpu_snapshot_uncached() -> dict[str, object]:
     if shutil.which("nvidia-smi"):
-        output = run_command(
-            [
-                "nvidia-smi",
-                "--query-gpu=name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu",
-                "--format=csv,noheader,nounits",
-            ]
-        )
+        try:
+            output = run_command(
+                [
+                    "nvidia-smi",
+                    "--query-gpu=name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu",
+                    "--format=csv,noheader,nounits",
+                ]
+            )
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            return {"available": False, "summary": "GPU stats unavailable right now."}
         first = output.splitlines()[0].strip()
         parts = [part.strip() for part in first.split(",")]
         if len(parts) >= 6:
@@ -78,6 +105,10 @@ def get_gpu_snapshot() -> dict[str, object]:
                 "summary": f"GPU {gpu_util_int}% • VRAM {memory_used_int}/{memory_total_int} MB",
             }
     return {"available": False, "summary": "GPU stats unavailable on this machine."}
+
+
+def get_gpu_snapshot() -> dict[str, object]:
+    return cached_snapshot("gpu", _get_gpu_snapshot_uncached)
 
 
 def print_processes(limit: int) -> None:
